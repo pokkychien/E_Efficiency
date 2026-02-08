@@ -8,6 +8,7 @@ Design goal (your workflow):
         (2) performs angular integration -> Bessel J0
         (3) performs k_parallel radial integral
         (4) plots results
+using only numpy and matplotlib (no scipy).
 
 Math (2D in-plane Fourier/Bessel transform):
     G_yy(rho) = (1/(2π)) ∫_0^{∞} k_parallel * J0(k_parallel*rho) * G_yy(k_parallel) dk_parallel
