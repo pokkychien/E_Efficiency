@@ -218,30 +218,66 @@ contains
         end if
     end function gyy_TE
 
-end module te_greens
+    ! d/dz_obs of G_yy for TE polarization
+    function dgyy_dzobs_TE(n_list, d_list, N, layer_src, z_src, layer_obs, z_obs, k0, kp) result(dGyy)
+        integer, intent(in) :: N, layer_src, layer_obs
+        real(dp), intent(in) :: n_list(N), d_list(N-1), z_src, z_obs, k0, kp
+        complex(dp) :: dGyy
+        
+        complex(dp) :: q_list(N), R_down(N), R_up(N)
+        complex(dp) :: f1y_src, f2y_src, q_obs, RF_obs, RB_obs
+        complex(dp) :: q, RF, RB, a, ddirect, dcavity, ddress
+        complex(dp) :: f1y_at_obs, f2y_at_obs, a_obs
+        real(dp) :: dz, s
+        
+        call compute_q_list(n_list, N, k0, kp, q_list)
+        call compute_RF_all(n_list, d_list, N, k0, kp, "TE", R_down)
+        call compute_RB_all(n_list, d_list, N, k0, kp, "TE", R_up)
+        
+        call TE_f1yf2y_same_layer(q_list, R_down, R_up, N, layer_src, z_src, k0, f1y_src, f2y_src)
+        
+        q_obs = q_list(layer_obs)
+        RF_obs = R_down(layer_obs)
+        RB_obs = R_up(layer_obs)
+        
+        ! Case A: same layer
+        if (layer_obs == layer_src) then
+            q = q_list(layer_src)
+            RF = R_down(layer_src)
+            RB = R_up(layer_src)
+            
+            a = q * k0
+            dz = z_obs - z_src
+            s = sign(1.0_dp, dz)
+            
+            ! ddirect = -0.5 * exp(-a*|dz|) * sign(dz)
+            ddirect = (-0.5_dp) * exp(-a * abs(dz)) * s
+            
+            ! dcavity = a * (exp(+a*z_obs)*RF*f1y - exp(-a*z_obs)*RB*f2y)
+            dcavity = a * (exp(a * z_obs) * RF * f1y_src - exp(-a * z_obs) * RB * f2y_src)
+            
+            dGyy = ddirect + dcavity
+            
+        ! Case B: obs below src
+        else if (layer_obs > layer_src) then
+            f1y_at_obs = propagate_down_TE(f1y_src, q_list, R_down, N, layer_src, layer_obs, k0, d_list)
+            
+            a_obs = q_obs * k0
+            ! ddress = -a_obs*exp(-a_obs*z_obs) + a_obs*exp(+a_obs*z_obs)*RF_obs
+            ddress = (-a_obs) * exp(-a_obs * z_obs) + a_obs * exp(a_obs * z_obs) * RF_obs
+            
+            dGyy = ddress * f1y_at_obs
+            
+        ! Case C: obs above src
+        else
+            f2y_at_obs = propagate_up_TE(f2y_src, q_list, R_up, N, layer_src, layer_obs, k0, d_list)
+            
+            a_obs = q_obs * k0
+            ! ddress = a_obs*exp(+a_obs*z_obs) - a_obs*exp(-a_obs*z_obs)*RB_obs
+            ddress = a_obs * exp(a_obs * z_obs) + (-a_obs) * exp(-a_obs * z_obs) * RB_obs
+            
+            dGyy = ddress * f2y_at_obs
+        end if
+    end function dgyy_dzobs_TE
 
-! Simple test program
-program test_te_greens
-    use te_greens
-    implicit none
-    
-    integer, parameter :: N = 4
-    real(dp) :: n_list(N), d_list(N-1)
-    real(dp) :: z_src, z_obs, k0, kp, wl
-    complex(dp) :: Gyy
-    
-    ! Setup
-    n_list = [1.0_dp, 1.5_dp, 1.3_dp, 1.0_dp]
-    d_list = [0.0_dp, 2000.0_dp, 1500.0_dp]
-    
-    z_src = 100.0_dp
-    z_obs = 200.0_dp
-    wl = 650.0_dp
-    k0 = 2.0_dp * 3.14159265359_dp / wl
-    kp = 0.3_dp * k0
-    
-    Gyy = gyy_TE(n_list, d_list, N, 1, z_src, 1, z_obs, k0, kp)
-    
-    print *, 'Gyy = ', real(Gyy), aimag(Gyy)
-    
-end program test_te_greens
+end module te_greens

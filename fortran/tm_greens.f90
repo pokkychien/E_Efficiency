@@ -230,32 +230,69 @@ contains
         end if
     end function gzx_TM
 
-end module tm_greens
+    ! d/dz_obs of G_xx for TM polarization
+    function dgxx_dzobs_TM(n_list, d_list, N, layer_src, z_src, layer_obs, z_obs, k0, kp) result(dGxx)
+        integer, intent(in) :: N, layer_src, layer_obs
+        real(dp), intent(in) :: n_list(N), d_list(N-1), z_src, z_obs, k0, kp
+        complex(dp) :: dGxx
+        
+        real(dp) :: eps_list(N), dz, s
+        complex(dp) :: q_list(N), R_down(N), R_up(N)
+        complex(dp) :: f1x_src, f2x_src, q_obs, RF_obs, RB_obs
+        complex(dp) :: q, RF, RB, a, ddirect, drefl, ddress
+        complex(dp) :: f1x_at_obs, f2x_at_obs, a_obs, eps
+        
+        eps_list = n_list**2
+        
+        call compute_q_list(n_list, N, k0, kp, q_list)
+        call compute_RF_all(n_list, d_list, N, k0, kp, "TM", R_down)
+        call compute_RB_all(n_list, d_list, N, k0, kp, "TM", R_up)
+        
+        call TM_f1xf2x_same_layer(q_list, R_down, R_up, N, layer_src, z_src, k0, kp, f1x_src, f2x_src)
+        
+        q_obs = q_list(layer_obs)
+        RF_obs = R_down(layer_obs)
+        RB_obs = R_up(layer_obs)
+        
+        ! Case A: same layer
+        if (layer_obs == layer_src) then
+            q = q_list(layer_src)
+            eps = cmplx(eps_list(layer_src), 0.0_dp, kind=dp)
+            RF = R_down(layer_src)
+            RB = R_up(layer_src)
+            
+            a = q * k0
+            dz = z_obs - z_src
+            s = sign(1.0_dp, dz)
+            
+            ! ddirect = (q^2/(2*eps)) * exp(-a*|dz|) * sign(dz)
+            ddirect = (q*q/(2.0_dp*eps)) * exp(-a * abs(dz)) * s
+            
+            ! drefl = a * (exp(+a*z_obs)*RF*f1x - exp(-a*z_obs)*RB*f2x)
+            drefl = a * (exp(a * z_obs) * RF * f1x_src - exp(-a * z_obs) * RB * f2x_src)
+            
+            dGxx = ddirect + drefl
+            
+        ! Case B: obs below src
+        else if (layer_obs > layer_src) then
+            f1x_at_obs = propagate_down_TM(f1x_src, q_list, R_down, eps_list, N, layer_src, layer_obs, k0, d_list)
+            
+            a_obs = q_obs * k0
+            ! ddress = -a_obs*exp(-a_obs*z_obs) + a_obs*exp(+a_obs*z_obs)*RF_obs
+            ddress = (-a_obs) * exp(-a_obs * z_obs) + a_obs * exp(a_obs * z_obs) * RF_obs
+            
+            dGxx = ddress * f1x_at_obs
+            
+        ! Case C: obs above src
+        else
+            f2x_at_obs = propagate_up_TM(f2x_src, q_list, R_up, eps_list, N, layer_src, layer_obs, k0, d_list)
+            
+            a_obs = q_obs * k0
+            ! ddress = a_obs*exp(+a_obs*z_obs) - a_obs*exp(-a_obs*z_obs)*RB_obs
+            ddress = a_obs * exp(a_obs * z_obs) + (-a_obs) * exp(-a_obs * z_obs) * RB_obs
+            
+            dGxx = ddress * f2x_at_obs
+        end if
+    end function dgxx_dzobs_TM
 
-! Simple test program
-program test_tm_greens
-    use tm_greens
-    implicit none
-    
-    integer, parameter :: N = 4
-    real(dp) :: n_list(N), d_list(N-1)
-    real(dp) :: z_src, z_obs, k0, kp, wl
-    complex(dp) :: Gxx, Gzx
-    
-    ! Setup
-    n_list = [1.0_dp, 1.5_dp, 1.3_dp, 1.0_dp]
-    d_list = [0.0_dp, 2000.0_dp, 1500.0_dp]
-    
-    z_src = 100.0_dp
-    z_obs = 200.0_dp
-    wl = 650.0_dp
-    k0 = 2.0_dp * 3.14159265359_dp / wl
-    kp = 0.3_dp * k0
-    
-    Gxx = gxx_TM(n_list, d_list, N, 1, z_src, 1, z_obs, k0, kp)
-    Gzx = gzx_TM(n_list, d_list, N, 1, z_src, 1, z_obs, k0, kp)
-    
-    print *, 'Gxx = ', real(Gxx), aimag(Gxx)
-    print *, 'Gzx = ', real(Gzx), aimag(Gzx)
-    
-end program test_tm_greens
+end module tm_greens

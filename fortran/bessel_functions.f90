@@ -2,8 +2,8 @@
 ! Minimal Bessel function implementations for J0 and J2
 
 module bessel_functions
+    use multilayer_reflectance, only: dp
     implicit none
-    integer, parameter :: dp = selected_real_kind(15, 307)
     
 contains
 
