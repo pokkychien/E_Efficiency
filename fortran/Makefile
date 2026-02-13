@@ -1,39 +1,23 @@
-# Makefile for compiling Fortran optics codes
+# Makefile for te_integrate_single.f90 with DBESJ
+# Compile: make
+# Run:     make run
+# Clean:   make clean
 
 FC = gfortran
-FFLAGS = -O2 -Wall -std=f2008
-LDFLAGS = 
+FFLAGS = -O2 -Wall
 
-.PHONY: all clean
+TARGET = te_single
+SRC = te_integrate_single.f90 dbesj_free_form.f90
 
-all: main_te_integrate
+.PHONY: all run clean
 
-# Compile modules only (no main programs)
-# We use -c to compile to object, which stops at the module boundary
-multilayer_reflectance.o: multilayer_reflectance.f90
-	$(FC) $(FFLAGS) -c -o $@ $<
+all: $(TARGET)
 
-te_greens.o: te_greens.f90 multilayer_reflectance.o
-	$(FC) $(FFLAGS) -c -o $@ $<
+$(TARGET): $(SRC)
+	$(FC) $(FFLAGS) -o $@ $(SRC)
 
-tm_greens.o: tm_greens.f90 te_greens.o
-	$(FC) $(FFLAGS) -c -o $@ $<
+run: $(TARGET)
+	./$(TARGET)
 
-bessel_functions.o: bessel_functions.f90 multilayer_reflectance.o
-	$(FC) $(FFLAGS) -c -o $@ $<
-
-te_integrate.o: te_integrate.f90 te_greens.o tm_greens.o bessel_functions.o
-	$(FC) $(FFLAGS) -c -o $@ $<
-
-# Link main_te_integrate executable
-# Note: order matters - dependent modules must come after the files that use them
-main_te_integrate: te_integrate.o bessel_functions.o tm_greens.o te_greens.o multilayer_reflectance.o
-	$(FC) $(FFLAGS) -o $@ $^ $(LDFLAGS)
-
-# Clean up
 clean:
-	rm -f *.o *.mod main_te_integrate *.dat
-
-# Clean intermediate files but keep executables
-clean-obj:
-	rm -f *.o *.mod
+	rm -f $(TARGET) *.o *.mod *.dat

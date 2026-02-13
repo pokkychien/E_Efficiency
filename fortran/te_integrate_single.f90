@@ -275,13 +275,113 @@ end subroutine compute_RB_all
 
 
 !======================================================================
-! gyy_TE: TE Green's function component
+! TE source amplitudes f1y, f2y in source layer
+!======================================================================
+subroutine TE_f1yf2y_same_layer_ext(q_list_in, RF_all_in, RB_all_in, num_layers_in, &
+                                     layer_src_in, z_src_in, k0_in, f1y_out, f2y_out)
+    implicit none
+    integer, parameter :: dp = selected_real_kind(15, 307)
+    
+    integer, intent(in) :: num_layers_in, layer_src_in
+    complex(dp), intent(in) :: q_list_in(num_layers_in)
+    complex(dp), intent(in) :: RF_all_in(num_layers_in), RB_all_in(num_layers_in)
+    real(dp), intent(in) :: z_src_in, k0_in
+    complex(dp), intent(out) :: f1y_out, f2y_out
+    
+    complex(dp) :: q, RF, RB, ez, emz, den
+    
+    q  = q_list_in(layer_src_in)
+    RF = RF_all_in(layer_src_in)
+    RB = RB_all_in(layer_src_in)
+    
+    ez  = exp(+q * k0_in * z_src_in)
+    emz = exp(-q * k0_in * z_src_in)
+    den = 2.0_dp * q * k0_in * (1.0_dp - RF * RB)
+    
+    f1y_out = (ez + emz * RB) / den
+    f2y_out = (emz + ez * RF) / den
+end subroutine TE_f1yf2y_same_layer_ext
+
+
+!======================================================================
+! Propagate downward (layer_obs > layer_src)
+!======================================================================
+function propagate_down_TE_ext(f1_src_in, q_list_in, RF_all_in, num_layers_in, &
+                                layer_src_in, layer_obs_in, k0_in, d_list_in) result(f_out)
+    implicit none
+    integer, parameter :: dp = selected_real_kind(15, 307)
+    
+    integer, intent(in) :: num_layers_in, layer_src_in, layer_obs_in
+    complex(dp), intent(in) :: f1_src_in, q_list_in(num_layers_in), RF_all_in(num_layers_in)
+    real(dp), intent(in) :: k0_in, d_list_in(num_layers_in-1)
+    complex(dp) :: f_out
+    
+    complex(dp) :: ql, qlp, wn, wp, wq, Rnext, T, x_val
+    real(dp) :: d_l
+    integer :: l
+    
+    f_out = f1_src_in
+    
+    do l = layer_src_in, layer_obs_in - 1
+        d_l = d_list_in(l)
+        ql  = q_list_in(l)
+        qlp = q_list_in(l + 1)
+        
+        wn = qlp / ql
+        wp = 1.0_dp + wn
+        wq = 1.0_dp - wn
+        Rnext = RF_all_in(l + 1)
+        
+        T = 1.0_dp / (wp + wq * Rnext)
+        x_val = exp(-ql * k0_in * d_l)
+        f_out = T * x_val * f_out
+    end do
+end function propagate_down_TE_ext
+
+
+!======================================================================
+! Propagate upward (layer_obs < layer_src)
+!======================================================================
+function propagate_up_TE_ext(f2_src_in, q_list_in, RB_all_in, num_layers_in, &
+                              layer_src_in, layer_obs_in, k0_in, d_list_in) result(f_out)
+    implicit none
+    integer, parameter :: dp = selected_real_kind(15, 307)
+    
+    integer, intent(in) :: num_layers_in, layer_src_in, layer_obs_in
+    complex(dp), intent(in) :: f2_src_in, q_list_in(num_layers_in), RB_all_in(num_layers_in)
+    real(dp), intent(in) :: k0_in, d_list_in(num_layers_in-1)
+    complex(dp) :: f_out
+    
+    complex(dp) :: ql, qlp1, wn, mp, mm, r_l, T, x_val
+    real(dp) :: d_l
+    integer :: l
+    
+    f_out = f2_src_in
+    
+    do l = layer_src_in - 1, layer_obs_in, -1
+        d_l = d_list_in(l)
+        ql   = q_list_in(l)
+        qlp1 = q_list_in(l + 1)
+        
+        x_val = exp(-ql * k0_in * d_l)
+        wn = ql / qlp1
+        mp = 1.0_dp + wn
+        mm = 1.0_dp - wn
+        r_l = RB_all_in(l)
+        
+        T = 1.0_dp / (mp + mm * x_val * r_l * x_val)
+        f_out = x_val * T * f_out
+    end do
+end function propagate_up_TE_ext
+
+
+!======================================================================
+! gyy_TE: TE Green's function component (with cross-layer support)
 !======================================================================
 function gyy_TE_ext(q_list_in, RF_all_in, RB_all_in, d_list_in, num_layers_in, &
                 layer_src_in, z_src_in, layer_obs_in, z_obs_in, k0_in) result(G)
     implicit none
     integer, parameter :: dp = selected_real_kind(15, 307)
-    complex(dp), parameter :: zi_local = (0.0_dp, 1.0_dp)
     
     integer, intent(in) :: num_layers_in, layer_src_in, layer_obs_in
     complex(dp), intent(in) :: q_list_in(num_layers_in)
@@ -290,45 +390,56 @@ function gyy_TE_ext(q_list_in, RF_all_in, RB_all_in, d_list_in, num_layers_in, &
     real(dp), intent(in) :: z_src_in, z_obs_in, k0_in
     complex(dp) :: G
     
-    complex(dp) :: q_j, RF_j, RB_j, d_j
-    complex(dp) :: denom, prefactor
-    complex(dp) :: term1, term2, term3, term4
-    complex(dp) :: exp_sum, exp_diff
+    ! External functions
+    complex(dp) :: propagate_down_TE_ext, propagate_up_TE_ext
+    external :: propagate_down_TE_ext, propagate_up_TE_ext
     
-    integer :: j
+    complex(dp) :: f1y_src, f2y_src
+    complex(dp) :: q, RF, RB, q_obs, RF_obs, RB_obs
+    complex(dp) :: direct, cavity
+    complex(dp) :: f1y_at_obs, f2y_at_obs
     
-    j = layer_src_in  ! Assuming layer_src == layer_obs
+    ! Get source amplitudes
+    call TE_f1yf2y_same_layer_ext(q_list_in, RF_all_in, RB_all_in, num_layers_in, &
+                                   layer_src_in, z_src_in, k0_in, f1y_src, f2y_src)
     
-    q_j = q_list_in(j)
-    RF_j = RF_all_in(j)
-    RB_j = RB_all_in(j)
-    d_j = d_list_in(j)
+    q_obs  = q_list_in(layer_obs_in)
+    RF_obs = RF_all_in(layer_obs_in)
+    RB_obs = RB_all_in(layer_obs_in)
     
-    denom = 1.0_dp - RF_j * RB_j * exp(2.0_dp * zi_local * q_j * d_j)
-    prefactor = zi_local / (2.0_dp * q_j) / denom
-    
-    exp_sum = exp(zi_local * q_j * (z_obs_in + z_src_in))
-    exp_diff = exp(zi_local * q_j * abs(z_obs_in - z_src_in))
-    
-    ! Four terms
-    term1 = exp_diff
-    term2 = RF_j * exp(zi_local * q_j * 2.0_dp * d_j) * exp(zi_local * q_j * (-z_obs_in - z_src_in))
-    term3 = RB_j * exp_sum
-    term4 = RF_j * RB_j * exp(zi_local * q_j * 2.0_dp * d_j) * &
-            exp(zi_local * q_j * (z_obs_in - z_src_in) * sign(1.0_dp, z_src_in - z_obs_in))
-    
-    G = prefactor * (term1 + term2 + term3 + term4)
+    ! Case A: same layer
+    if (layer_obs_in == layer_src_in) then
+        q  = q_list_in(layer_src_in)
+        RF = RF_all_in(layer_src_in)
+        RB = RB_all_in(layer_src_in)
+        
+        direct = (1.0_dp / (2.0_dp * q * k0_in)) * exp(-q * k0_in * abs(z_obs_in - z_src_in))
+        cavity = exp(+q * k0_in * z_obs_in) * RF * f1y_src + &
+                 exp(-q * k0_in * z_obs_in) * RB * f2y_src
+        G = direct + cavity
+        
+    ! Case B: obs below src (layer_obs > layer_src)
+    else if (layer_obs_in > layer_src_in) then
+        f1y_at_obs = propagate_down_TE_ext(f1y_src, q_list_in, RF_all_in, num_layers_in, &
+                                            layer_src_in, layer_obs_in, k0_in, d_list_in)
+        G = (exp(-q_obs * k0_in * z_obs_in) + exp(+q_obs * k0_in * z_obs_in) * RF_obs) * f1y_at_obs
+        
+    ! Case C: obs above src (layer_obs < layer_src)
+    else
+        f2y_at_obs = propagate_up_TE_ext(f2y_src, q_list_in, RB_all_in, num_layers_in, &
+                                          layer_src_in, layer_obs_in, k0_in, d_list_in)
+        G = (exp(+q_obs * k0_in * z_obs_in) + exp(-q_obs * k0_in * z_obs_in) * RB_obs) * f2y_at_obs
+    end if
 end function gyy_TE_ext
 
 
 !======================================================================
-! dgyy_dzobs_TE: Derivative of gyy_TE with respect to z_obs
+! dgyy_dzobs_TE: Derivative of gyy_TE with respect to z_obs (with cross-layer)
 !======================================================================
 function dgyy_dzobs_TE_ext(q_list_in, RF_all_in, RB_all_in, d_list_in, num_layers_in, &
                        layer_src_in, z_src_in, layer_obs_in, z_obs_in, k0_in) result(dG)
     implicit none
     integer, parameter :: dp = selected_real_kind(15, 307)
-    complex(dp), parameter :: zi_local = (0.0_dp, 1.0_dp)
     
     integer, intent(in) :: num_layers_in, layer_src_in, layer_obs_in
     complex(dp), intent(in) :: q_list_in(num_layers_in)
@@ -337,93 +448,66 @@ function dgyy_dzobs_TE_ext(q_list_in, RF_all_in, RB_all_in, d_list_in, num_layer
     real(dp), intent(in) :: z_src_in, z_obs_in, k0_in
     complex(dp) :: dG
     
-    complex(dp) :: q_j, RF_j, RB_j, d_j
-    complex(dp) :: denom, prefactor
-    complex(dp) :: term1, term2, term3, term4
-    real(dp) :: sgn
+    ! External functions
+    complex(dp) :: propagate_down_TE_ext, propagate_up_TE_ext
+    external :: propagate_down_TE_ext, propagate_up_TE_ext
     
-    integer :: j
+    complex(dp) :: f1y_src, f2y_src
+    complex(dp) :: q, RF, RB, a, q_obs, RF_obs, RB_obs, a_obs
+    complex(dp) :: ddirect, dcavity, ddress
+    complex(dp) :: f1y_at_obs, f2y_at_obs
+    real(dp) :: dz, s
     
-    j = layer_src_in
+    ! Get source amplitudes
+    call TE_f1yf2y_same_layer_ext(q_list_in, RF_all_in, RB_all_in, num_layers_in, &
+                                   layer_src_in, z_src_in, k0_in, f1y_src, f2y_src)
     
-    q_j = q_list_in(j)
-    RF_j = RF_all_in(j)
-    RB_j = RB_all_in(j)
-    d_j = d_list_in(j)
+    q_obs  = q_list_in(layer_obs_in)
+    RF_obs = RF_all_in(layer_obs_in)
+    RB_obs = RB_all_in(layer_obs_in)
     
-    denom = 1.0_dp - RF_j * RB_j * exp(2.0_dp * zi_local * q_j * d_j)
-    prefactor = zi_local / (2.0_dp * q_j) / denom
-    
-    if (z_obs_in >= z_src_in) then
-        sgn = 1.0_dp
+    ! Case A: same layer
+    if (layer_obs_in == layer_src_in) then
+        q  = q_list_in(layer_src_in)
+        RF = RF_all_in(layer_src_in)
+        RB = RB_all_in(layer_src_in)
+        
+        a  = q * k0_in
+        dz = z_obs_in - z_src_in
+        
+        if (dz >= 0.0_dp) then
+            s = 1.0_dp
+        else
+            s = -1.0_dp
+        end if
+        
+        ! ddirect = -0.5 * exp(-a*|dz|) * sign(dz)
+        ddirect = (-0.5_dp) * exp(-a * abs(dz)) * s
+        
+        ! dcavity = a * (exp(+a*z_obs)*RF*f1y - exp(-a*z_obs)*RB*f2y)
+        dcavity = a * (exp(+a * z_obs_in) * RF * f1y_src - exp(-a * z_obs_in) * RB * f2y_src)
+        
+        dG = ddirect + dcavity
+        
+    ! Case B: obs below src (layer_obs > layer_src)
+    else if (layer_obs_in > layer_src_in) then
+        f1y_at_obs = propagate_down_TE_ext(f1y_src, q_list_in, RF_all_in, num_layers_in, &
+                                            layer_src_in, layer_obs_in, k0_in, d_list_in)
+        a_obs = q_obs * k0_in
+        ! ddress = -a_obs*exp(-a_obs*z) + a_obs*exp(+a_obs*z)*RF_obs
+        ddress = (-a_obs) * exp(-a_obs * z_obs_in) + a_obs * exp(+a_obs * z_obs_in) * RF_obs
+        dG = ddress * f1y_at_obs
+        
+    ! Case C: obs above src (layer_obs < layer_src)
     else
-        sgn = -1.0_dp
+        f2y_at_obs = propagate_up_TE_ext(f2y_src, q_list_in, RB_all_in, num_layers_in, &
+                                          layer_src_in, layer_obs_in, k0_in, d_list_in)
+        a_obs = q_obs * k0_in
+        ! ddress = a_obs*exp(+a_obs*z) - a_obs*exp(-a_obs*z)*RB_obs
+        ddress = a_obs * exp(+a_obs * z_obs_in) + (-a_obs) * exp(-a_obs * z_obs_in) * RB_obs
+        dG = ddress * f2y_at_obs
     end if
-    
-    term1 = zi_local * q_j * sgn * exp(zi_local * q_j * abs(z_obs_in - z_src_in))
-    term2 = -zi_local * q_j * RF_j * exp(zi_local * q_j * 2.0_dp * d_j) * &
-            exp(zi_local * q_j * (-z_obs_in - z_src_in))
-    term3 = zi_local * q_j * RB_j * exp(zi_local * q_j * (z_obs_in + z_src_in))
-    term4 = zi_local * q_j * sgn * RF_j * RB_j * exp(zi_local * q_j * 2.0_dp * d_j) * &
-            exp(zi_local * q_j * (z_obs_in - z_src_in) * (-sgn))
-    
-    dG = prefactor * (term1 + term2 + term3 + term4)
 end function dgyy_dzobs_TE_ext
-
-
-!======================================================================
-! Bessel J0 series expansion
-!======================================================================
-function J0_series_ext(x_in) result(j0)
-    implicit none
-    integer, parameter :: dp = selected_real_kind(15, 307)
-    
-    real(dp), intent(in) :: x_in
-    real(dp) :: j0
-    
-    real(dp) :: term, x2
-    integer :: k
-    
-    j0 = 1.0_dp
-    term = 1.0_dp
-    x2 = (x_in / 2.0_dp)**2
-    
-    do k = 1, 50
-        term = -term * x2 / real(k, dp)**2
-        j0 = j0 + term
-        if (abs(term) < 1.0e-15_dp * abs(j0)) exit
-    end do
-end function J0_series_ext
-
-
-!======================================================================
-! Bessel J2 series expansion
-!======================================================================
-function J2_series_ext(x_in) result(j2)
-    implicit none
-    integer, parameter :: dp = selected_real_kind(15, 307)
-    
-    real(dp), intent(in) :: x_in
-    real(dp) :: j2
-    
-    real(dp) :: term, x2
-    integer :: k
-    
-    if (abs(x_in) < 1.0e-30_dp) then
-        j2 = 0.0_dp
-        return
-    end if
-    
-    j2 = (x_in / 2.0_dp)**2 / 2.0_dp
-    term = j2
-    x2 = (x_in / 2.0_dp)**2
-    
-    do k = 1, 50
-        term = -term * x2 / (real(k, dp) * real(k + 2, dp))
-        j2 = j2 + term
-        if (abs(term) < 1.0e-15_dp * abs(j2)) exit
-    end do
-end function J2_series_ext
 
 
 !======================================================================
@@ -467,18 +551,20 @@ subroutine gyy_TE_rho_full(n_list_in, d_list_in, num_layers_in, &
     
     ! External function declarations
     complex(dp) :: gyy_TE_ext, dgyy_dzobs_TE_ext, trapz_complex_ext
-    real(dp) :: J0_series_ext, J2_series_ext
     external :: gyy_TE_ext, dgyy_dzobs_TE_ext, trapz_complex_ext
-    external :: J0_series_ext, J2_series_ext
     
     ! Local arrays
     real(dp), allocatable :: k_parallel(:)
     complex(dp), allocatable :: q_list_local(:), RF_all_local(:), RB_all_local(:)
     complex(dp), allocatable :: integrand(:,:)
     
+    ! DBESJ variables
+    real(8) :: bessel_x, bessel_y(3)
+    integer :: bessel_nz
+    
     real(dp) :: dk, kp, J0_val, J2_val
-    complex(dp) :: gyy_val, dgyy_val, q_j
-    complex(dp) :: I1, I2, I3, I4, I5, I6, I7, I8, I9, I10
+    complex(dp) :: gyy_val, dgyy_val
+    complex(dp) :: I1, I2, I3, I4
     integer :: i
     
     ! Allocate arrays
@@ -486,7 +572,7 @@ subroutine gyy_TE_rho_full(n_list_in, d_list_in, num_layers_in, &
     allocate(q_list_local(num_layers_in))
     allocate(RF_all_local(num_layers_in))
     allocate(RB_all_local(num_layers_in))
-    allocate(integrand(num_k_in, 10))
+    allocate(integrand(num_k_in, 4))
     
     ! Generate k_parallel grid (avoid k=0)
     dk = k_parallel_max_in / real(num_k_in - 1, dp)
@@ -510,39 +596,33 @@ subroutine gyy_TE_rho_full(n_list_in, d_list_in, num_layers_in, &
         dgyy_val = dgyy_dzobs_TE_ext(q_list_local, RF_all_local, RB_all_local, d_list_in, num_layers_in, &
                                  layer_src_in, z_src_in, layer_obs_in, z_obs_in, k0_in)
         
-        q_j = q_list_local(layer_src_in)
+        ! Bessel functions using DBESJ (compute J0, J1, J2 in one call)
+        bessel_x = kp * rho_in
+        if (bessel_x < 1.0d-30) then
+            J0_val = 1.0_dp
+            J2_val = 0.0_dp
+        else
+            call DBESJ(bessel_x, 0.0d0, 3, bessel_y, bessel_nz)
+            J0_val = bessel_y(1)  ! J0
+            J2_val = bessel_y(3)  ! J2
+        end if
         
-        ! Bessel functions
-        J0_val = J0_series_ext(kp * rho_in)
-        J2_val = J2_series_ext(kp * rho_in)
-        
-        ! 10 integrands (matching Python)
-        integrand(i, 1) = kp * J0_val * gyy_val                           ! Integral 1
-        integrand(i, 2) = kp * J2_val * gyy_val                           ! Integral 2
-        integrand(i, 3) = kp * J0_val * dgyy_val                          ! Integral 3
-        integrand(i, 4) = kp * J2_val * dgyy_val                          ! Integral 4
-        integrand(i, 5) = kp**3 / q_j**2 * J0_val * gyy_val               ! Integral 5
-        integrand(i, 6) = kp**3 / q_j**2 * J2_val * gyy_val               ! Integral 6
-        integrand(i, 7) = kp**3 / q_j**2 * J0_val * dgyy_val              ! Integral 7
-        integrand(i, 8) = kp**3 / q_j**2 * J2_val * dgyy_val              ! Integral 8
-        integrand(i, 9) = kp**2 / q_j * J0_val * gyy_val                  ! Integral 9
-        integrand(i, 10) = kp**2 / q_j * J2_val * gyy_val                 ! Integral 10
+        ! 4 integrands (TE mode only, matching Python I1-I4)
+        ! I5-I10 require TM mode (gxx, dgxx, gzx) - not yet implemented
+        integrand(i, 1) = kp * J0_val * gyy_val                           ! I1: kp * J0 * Gyy
+        integrand(i, 2) = kp * J0_val * conjg(dgyy_val)                   ! I2: kp * J0 * conj(DGyy)
+        integrand(i, 3) = kp * J2_val * gyy_val                           ! I3: kp * J2 * Gyy
+        integrand(i, 4) = kp * J2_val * conjg(dgyy_val)                   ! I4: kp * J2 * conj(DGyy)
     end do
     
-    ! Integrate each component
+    ! Integrate each component (TE mode: I1-I4 only)
     I1 = trapz_complex_ext(integrand(:,1), dk, num_k_in)
     I2 = trapz_complex_ext(integrand(:,2), dk, num_k_in)
     I3 = trapz_complex_ext(integrand(:,3), dk, num_k_in)
     I4 = trapz_complex_ext(integrand(:,4), dk, num_k_in)
-    I5 = trapz_complex_ext(integrand(:,5), dk, num_k_in)
-    I6 = trapz_complex_ext(integrand(:,6), dk, num_k_in)
-    I7 = trapz_complex_ext(integrand(:,7), dk, num_k_in)
-    I8 = trapz_complex_ext(integrand(:,8), dk, num_k_in)
-    I9 = trapz_complex_ext(integrand(:,9), dk, num_k_in)
-    I10 = trapz_complex_ext(integrand(:,10), dk, num_k_in)
     
-    ! Combine (simplified - just sum for demonstration)
-    result_out = I1 + I2 + I3 + I4 + I5 + I6 + I7 + I8 + I9 + I10
+    ! Combine TE contribution (I5-I10 TM mode not implemented)
+    result_out = I1 + I2 + I3 + I4
     
     ! Deallocate
     deallocate(k_parallel, q_list_local, RF_all_local, RB_all_local, integrand)

@@ -238,7 +238,7 @@ def demo_all_integrals():
     k0 = 2 * np.pi / wl
     
     # integration
-    k_parallel_max = 10.0 * k0
+    k_parallel_max = 1.0 * k0
     num_k = 501
     delta = 0.0001
     
@@ -293,7 +293,7 @@ def demo_full_efficiency():
     delta = 0.0001
     
     # rho sweep
-    rhos = np.linspace(0.01, 1.5, 200)
+    rhos = np.linspace(0.01, 5.0, 400)
     
     eff = np.array([
         full_efficiency_integrand(
@@ -303,6 +303,10 @@ def demo_full_efficiency():
         for r in rhos
     ])
     
+    # Cylindrical coordinate integration: 2π ∫ eff(ρ) * ρ dρ
+    integrand_cyl = eff * rhos
+    total_integral = 2 * np.pi * np.trapz(integrand_cyl, rhos)
+    
     plt.figure()
     plt.plot(rhos, np.real(eff), label="Re")
     plt.plot(rhos, np.imag(eff), label="Im")
@@ -311,6 +315,18 @@ def demo_full_efficiency():
     plt.ylabel("Full Efficiency Integrand")
     plt.legend()
     plt.title("Full Efficiency Integrand (all terms)")
+    
+    # Display the integrated value on the plot
+    text_str = (f"$2\\pi \\int_0^{{\\rho_{{max}}}} f(\\rho) \\rho \\, d\\rho$\n"
+                f"= {np.real(total_integral):.6f} + {np.imag(total_integral):.6f}i")
+    plt.text(0.95, 0.95, text_str, transform=plt.gca().transAxes,
+             fontsize=10, verticalalignment='top', horizontalalignment='right',
+             bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8))
+    
+    print(f"Cylindrical integral: {total_integral}")
+    print(f"  Real part: {np.real(total_integral)}")
+    print(f"  Imag part: {np.imag(total_integral)}")
+    
     plt.tight_layout()
     plt.show()
 
