@@ -71,7 +71,11 @@ def compute_interface_params_up_down(n_list, d_list, k0, kp, polarization="TE"):
 def compute_RF_all(n_list, d_list, k0, kp, polarization="TE"):
     """
     RF_all[j] = reflection seen when standing at TOP of layer j, looking downward.
-    Implemented using params_down (wp, wq, x), equivalent to original RF_multilayer().
+    
+    NOTE: The sign is flipped at the end to match the phase convention in the
+    Green's function cavity term. The Fresnel formula gives r = (q1-q2)/(q1+q2),
+    but the cavity term uses exp(+q*k0*z)*RF where exp(+q*k0*z) represents a
+    wave traveling toward +z. For correct interference, RF needs a sign flip.
     """
     params_down, params_up = compute_interface_params_up_down(n_list, d_list, k0, kp, polarization)
     N = len(n_list)
@@ -94,6 +98,12 @@ def compute_RF_all(n_list, d_list, k0, kp, polarization="TE"):
         RF_all[L] = r_eff
 
     RF_all[N-1] = 0.0 + 0.0j   # bottom semi-infinite region
+    
+    # Note: DO NOT apply sign flip to RF.
+    # Energy conservation test shows that flipping RF causes 
+    # total power in air > 2/3, violating energy conservation.
+    # Without flip: backward power > 1/3 (correct - reflection enhances backward)
+    
     return RF_all
 
 

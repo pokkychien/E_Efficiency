@@ -362,10 +362,12 @@ def gzx_TM(n_list, d_list,layer_src, z_src,layer_obs, z_obs,k0, kp):
         q  = q_list[layer_src]
         RF = R_down[layer_src]
         RB = R_up[layer_src]
+        eps = eps_list[layer_src]
+        ka2 = k0**2 * eps  # ka^2 = (k0 * n)^2 = k0^2 * eps
 
         sgn = np.sign(z_obs - z_src)
 
-        gzx = ( -1j * kp / (2 * k0**2) * sgn * np.exp(-q * k0 * np.abs(z_obs - z_src))
+        gzx = ( -1j * kp / (2 * ka2) * sgn * np.exp(-q * k0 * np.abs(z_obs - z_src))
             + (1j * kp / q) * ( - np.exp(+q * k0 * z_obs) * RF * f1x_src + np.exp(-q * k0 * z_obs) * RB * f2x_src ))
         return gzx
 
