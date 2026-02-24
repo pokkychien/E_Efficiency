@@ -78,7 +78,7 @@ def TM_f1zf2z_same_layer(q_list, R_down, R_up, layer_src, z_src, k0, kp):
 
     return f1z, f2z
 
-def propagate_down_TM(f1_src, q_list, R_down, layer_src, layer_obs,k0, d_list, eps_list):
+def propagate_down_TM(f1_src, q_list, R_down, R_up, layer_src, layer_obs, k0, d_list, eps_list):
 
     if layer_obs <= layer_src:
         raise ValueError("propagate_down_TM requires layer_obs > layer_src")
@@ -86,6 +86,7 @@ def propagate_down_TM(f1_src, q_list, R_down, layer_src, layer_obs,k0, d_list, e
     f = f1_src
 
     for l in range(layer_src, layer_obs):
+        # R_up 目前沒用到，但保留接口
         d_l = d_list[l] if l < len(d_list) else 0.0
         ql  = q_list[l]
         qlp = q_list[l + 1]
@@ -93,8 +94,8 @@ def propagate_down_TM(f1_src, q_list, R_down, layer_src, layer_obs,k0, d_list, e
         eps_lp = eps_list[l + 1]
 
         wn = (qlp / ql) * (eps_l / eps_lp)
-        wp = 1.0 + wn        # M_l^+
-        wq = 1.0 - wn        # M_l^-
+        wp = (1.0 + wn)/2        # M_l^+
+        wq = (1.0 - wn)/2        # M_l^-
         Rnext = R_down[l + 1]
         T = 1.0 / (wp + wq * Rnext)
         x = np.exp(-ql * k0 * d_l)
@@ -103,7 +104,7 @@ def propagate_down_TM(f1_src, q_list, R_down, layer_src, layer_obs,k0, d_list, e
     return f
 
 
-def propagate_up_TM(f2_src, q_list, R_up, layer_src, layer_obs,k0, d_list, eps_list):
+def propagate_up_TM(f2_src, q_list, R_down, R_up, layer_src, layer_obs, k0, d_list, eps_list):
 
     if layer_obs >= layer_src:
         raise ValueError("propagate_up_TM requires layer_obs < layer_src")
@@ -112,6 +113,7 @@ def propagate_up_TM(f2_src, q_list, R_up, layer_src, layer_obs,k0, d_list, eps_l
 
     # l = layer_src-1, ..., layer_obs
     for l in range(layer_src - 1, layer_obs - 1, -1):
+        # R_down 目前沒用到，但保留接口
 
         d_l = d_list[l] if l < len(d_list) else 0.0
         ql   = q_list[l]
@@ -119,8 +121,8 @@ def propagate_up_TM(f2_src, q_list, R_up, layer_src, layer_obs,k0, d_list, eps_l
         eps_l  = eps_list[l]
         eps_lp = eps_list[l + 1]
         wn = (ql / qlp1) * (eps_lp / eps_l)
-        mp = 1.0 + wn     # m^+
-        mm = 1.0 - wn     # m^-
+        mp = (1.0 + wn)/2     # m^+
+        mm = (1.0 - wn)/2     # m^-
         r_l = R_up[l]
         x = np.exp(-ql * k0 * d_l)
         T = 1.0 / (mp + mm * x * r_l * x)
@@ -164,7 +166,7 @@ def gxx_TM(n_list, d_list, layer_src, z_src,layer_obs, z_obs,k0, kp):
     # -------------------------
     if layer_obs > layer_src:
         f1x_at_obs_top = propagate_down_TM(
-            f1x_src, q_list, R_down,
+            f1x_src, q_list, R_down, R_up,
             layer_src, layer_obs,
             k0, d_list, eps_list
         )
@@ -176,7 +178,7 @@ def gxx_TM(n_list, d_list, layer_src, z_src,layer_obs, z_obs,k0, kp):
     # Case C: obs above src
     # -------------------------
     f2x_at_obs_top = propagate_up_TM(
-        f2x_src, q_list, R_up,
+        f2x_src, q_list, R_down, R_up,
         layer_src, layer_obs,
         k0, d_list, eps_list
     )
@@ -234,7 +236,7 @@ def gzz_TM(n_list, d_list, layer_src, z_src, layer_obs, z_obs, k0, kp):
     # obs below src  (use f1-branch)
     # -------------------------
     if layer_obs > layer_src:
-        df1x_at_obs_top = propagate_down_TM(df1x_src, q_list, R_down,layer_src, layer_obs,k0, d_list, eps_list)
+        df1x_at_obs_top = propagate_down_TM(df1x_src, q_list, R_down, R_up, layer_src, layer_obs, k0, d_list, eps_list)
         # A(z) = exp(-qz) + exp(+qz) RF
         # A'(z)= -q exp(-qz) + q exp(+qz) RF
         Aprime = (-q_obs* k0) * np.exp(-q_obs * k0 * z_obs) + (q_obs * k0) * np.exp(+q_obs * k0 * z_obs) * RF_obs
@@ -245,7 +247,7 @@ def gzz_TM(n_list, d_list, layer_src, z_src, layer_obs, z_obs, k0, kp):
     # -------------------------
     # obs above src  (use f2-branch)
     # -------------------------
-    df2x_at_obs_top = propagate_up_TM(df2x_src, q_list, R_up,layer_src, layer_obs,k0, d_list, eps_list)
+    df2x_at_obs_top = propagate_up_TM(df2x_src, q_list, R_down, R_up, layer_src, layer_obs, k0, d_list, eps_list)
 
     # B(z) = exp(+qz) + exp(-qz) RB
     # B'(z)= +q exp(+qz) - q exp(-qz) RB
@@ -305,7 +307,7 @@ def gxz_TM(n_list, d_list,layer_src, z_src,layer_obs, z_obs,k0, kp):
     # Case B: obs below src  (layer_obs > layer_src) -> use f1z branch
     # ============================================================
     if layer_obs > layer_src:
-        f1z_at_obs = propagate_down_TM(f1z_src, q_list, R_down,layer_src, layer_obs,k0, d_list, eps_list)
+        f1z_at_obs = propagate_down_TM(f1z_src, q_list, R_down, R_up, layer_src, layer_obs, k0, d_list, eps_list)
 
         Gxz = (
             np.exp(-q_obs * k0 * z_obs) * f1z_at_obs
@@ -316,7 +318,7 @@ def gxz_TM(n_list, d_list,layer_src, z_src,layer_obs, z_obs,k0, kp):
     # ============================================================
     # Case C: obs above src (layer_obs < layer_src) -> use f2z branch
     # ============================================================
-    f2z_at_obs = propagate_up_TM(f2z_src, q_list, R_up,layer_src, layer_obs,k0, d_list, eps_list)
+    f2z_at_obs = propagate_up_TM(f2z_src, q_list, R_down, R_up, layer_src, layer_obs, k0, d_list, eps_list)
 
     Gxz = (
         np.exp(+q_obs * k0 * z_obs) * f2z_at_obs
@@ -375,7 +377,7 @@ def gzx_TM(n_list, d_list,layer_src, z_src,layer_obs, z_obs,k0, kp):
     # Case B: obs below src  (layer_obs > layer_src) -> f1x branch
     # ============================================================
     if layer_obs > layer_src:
-        f1x_at_obs = propagate_down_TM(f1x_src, q_list, R_down,layer_src, layer_obs,k0, d_list, eps_list)
+        f1x_at_obs = propagate_down_TM(f1x_src, q_list, R_down, R_up, layer_src, layer_obs, k0, d_list, eps_list)
 
         # From Gxx = (e^{-qz} + e^{+qz} RF) f1
         # ∂zGxx = (-q e^{-qz} + q e^{+qz} RF) f1
@@ -388,7 +390,7 @@ def gzx_TM(n_list, d_list,layer_src, z_src,layer_obs, z_obs,k0, kp):
     # ============================================================
     # Case C: obs above src (layer_obs < layer_src) -> f2x branch
     # ============================================================
-    f2x_at_obs = propagate_up_TM(f2x_src, q_list, R_up,layer_src, layer_obs,k0, d_list, eps_list)
+    f2x_at_obs = propagate_up_TM(f2x_src, q_list, R_down, R_up, layer_src, layer_obs, k0, d_list, eps_list)
 
     # From Gxx = (e^{+qz} + e^{-qz} RB) f2
     # ∂zGxx = ( +q e^{+qz} - q e^{-qz} RB) f2
@@ -463,7 +465,7 @@ def dgxx_dzobs_TM( n_list, d_list, layer_src, z_src, layer_obs, z_obs, k0, kp, t
     # -------------------------
     if layer_obs > layer_src:
         f1x_at_obs_top = propagate_down_TM(
-            f1x_src, q_list, R_down,
+            f1x_src, q_list, R_down, R_up,
             layer_src, layer_obs,
             k0, d_list, eps_list
         )
@@ -479,7 +481,7 @@ def dgxx_dzobs_TM( n_list, d_list, layer_src, z_src, layer_obs, z_obs, k0, kp, t
     # Case C: obs above src
     # -------------------------
     f2x_at_obs_top = propagate_up_TM(
-        f2x_src, q_list, R_up,
+        f2x_src, q_list, R_down, R_up,
         layer_src, layer_obs,
         k0, d_list, eps_list
     )

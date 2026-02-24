@@ -165,28 +165,29 @@ def propagate_down_TE(f1_src, q_list, R_down, R_up, layer_src, layer_obs, k0, d_
         ql  = q_list[l]
         qlp = q_list[l+1]
         wn = qlp / ql
-        wp = 1.0 + wn          # M_l^+
-        wq = 1.0 - wn          # M_l^-
+        wp = (1.0 + wn)/2          # M_l^+
+        wq = (1.0 - wn)/2          # M_l^-
         Rnext = R_down[l+1]    # R_{l+1}
         T = 1.0 / (wp + wq * Rnext)       # T_l (paper)
         x = np.exp(-ql * k0 * d_l)        # e^{-q_l d_l}
         f = T * x * f                     # f_{l+1} = T_l e^{-q_l d_l} f_l
     return f
 
-def propagate_up_TE(f2_src, q_list, R_up, layer_src, layer_obs, k0, d_list):  
+def propagate_up_TE(f2_src, q_list, R_down, R_up, layer_src, layer_obs, k0, d_list):  
     if layer_obs >= layer_src:
         raise ValueError("propagate_up_TE requires layer_obs < layer_src")
     
     f = f2_src
-    for l in range(layer_src - 1, layer_obs - 1, -1):
+    for l in range(layer_src -1, layer_obs -1, -1):
         d_l = d_list[l] if l < len(d_list) else 0.0
         ql   = q_list[l]
         qlp1 = q_list[l + 1]
         x = np.exp(-ql * k0 * d_l)
         wn = ql / qlp1
-        mp = 1.0 + wn     # m^+
-        mm = 1.0 - wn     # m^-
+        mp = (1.0 + wn)/2     # m^+
+        mm = (1.0 - wn)/2     # m^-
         r_l = R_up[l]
+        # R_down 目前沒用到，但保留接口
         T = 1.0 / (mp + mm * x * r_l * x)
         f = x * T * f
     return f
@@ -215,11 +216,11 @@ def gyy_TE(n_list, d_list, layer_src, z_src, layer_obs, z_obs, k0, kp):
         Gyy = direct + cavity
 
     elif layer_obs > layer_src:
-        f1y_at_obs_top = propagate_down_TE( f1y_src, q_list, R_down,layer_src, layer_obs, k0, d_list )
+        f1y_at_obs_top = propagate_down_TE( f1y_src, q_list, R_down, R_up, layer_src, layer_obs, k0, d_list )
         Gyy = ( np.exp(-q_obs * k0 * z_obs) + np.exp(+q_obs * k0 * z_obs) * RF_obs) * f1y_at_obs_top
 
     else:
-        f2y_at_obs_top = propagate_up_TE( f2y_src, q_list, R_up,layer_src, layer_obs, k0, d_list )
+        f2y_at_obs_top = propagate_up_TE( f2y_src, q_list, R_down, R_up, layer_src, layer_obs, k0, d_list )
         Gyy = (np.exp(+q_obs * k0 * z_obs)+ np.exp(-q_obs * k0 * z_obs) * RB_obs) * f2y_at_obs_top
 
     return Gyy
@@ -280,7 +281,7 @@ def dgyy_dzobs_TE(n_list, d_list,layer_src, z_src,layer_obs, z_obs,k0, kp,tol: f
     # -------------------------
     if layer_obs > layer_src:
         f1y_at_obs_top = propagate_down_TE(
-            f1y_src, q_list, R_down,
+            f1y_src, q_list, R_down, R_up,
             layer_src, layer_obs,
             k0, d_list
         )
@@ -296,7 +297,7 @@ def dgyy_dzobs_TE(n_list, d_list,layer_src, z_src,layer_obs, z_obs,k0, kp,tol: f
     # Case C: obs above src
     # -------------------------
     f2y_at_obs_top = propagate_up_TE(
-        f2y_src, q_list, R_up,
+        f2y_src, q_list, R_down, R_up,
         layer_src, layer_obs,
         k0, d_list
     )
