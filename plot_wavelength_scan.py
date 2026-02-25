@@ -3,13 +3,13 @@ import matplotlib.pyplot as plt
 from te_integrate_plot import compute_power_flux_kp
 
 # Three-layer structure: Air | Glass (500nm) | Air  (Fabry-Perot)
-n_list = [1.0, 1.52, 1.0]
+n_list = [1.0, 1.50, 1.0]
 d_list = [0.0, 0.5]  # glass film thickness = 500 nm
 
 # Source in AIR, observation away from interface
 layer_src = 1
 layer_obs = 2
-z_src = 0.4   # 250 nm from interface (far field)
+z_src = 0.25   # 250 nm from interface (far field)
 z_obs = 3.0  # 1500 nm behind source (away from interface)
 
 # Wavelength scan (finer resolution for FP resonance)
