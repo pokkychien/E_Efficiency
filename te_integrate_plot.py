@@ -45,7 +45,7 @@ def compute_power_flux_kp(
             + gyy * np.conj(dgyy)
         )
         return np.imag(val)
-    P, _ = quad(integrand, 0, 0.995*ka, limit=limit)
+    P, _ = quad(integrand, 0, 0.9948*ka, limit=limit)
     
     return P
 

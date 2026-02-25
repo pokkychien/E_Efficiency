@@ -6,8 +6,11 @@ make all --print-data-base --no-builtin-variables --no-builtin-rules --question
 # PARTICULAR PURPOSE.
 
 # This program built for i386-apple-darwin11.3.0
+ 
+make: *** No rule to make target `all'.  Stop.
 
-# Make data base, printed on Tue Feb 24 16:38:28 2026
+
+# Make data base, printed on Wed Feb 25 16:05:01 2026
 
 # Variables
 
@@ -24,7 +27,7 @@ VSCODE_CRASH_REPORTER_PROCESS_TYPE = extensionHost
 # automatic
 @F = $(notdir $@)
 # makefile
-CURDIR := /Users/chienpokky/Library/Mobile Documents/com~apple~CloudDocs/PokkyFiles/research/optics/FPCavity/code/E_Efficiency
+CURDIR := /Users/chienpokky/Library/Mobile Documents/com~apple~CloudDocs/PokkyFiles/research/optics/FPCavity/code/archived/E_Efficiency
 # makefile
 SHELL = /bin/sh
 # environment
@@ -39,24 +42,25 @@ __CFBundleIdentifier = com.microsoft.VSCode
 INFOPATH = /opt/homebrew/share/info:
 # environment
 VSCODE_CWD = /
+ 
 # environment
 GSETTINGS_SCHEMA_DIR = /opt/anaconda3/share/glib-2.0/schemas
 # environment
 PATH = /opt/anaconda3/bin:/opt/anaconda3/condabin:/Library/TeX/texbin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/opt/pmk/env/global/bin:/Library/TeX/texbin
 # environment
-LaunchInstanceID = 8C66676B-E0AB-4272-BC8C-3355BB5909ED
+LaunchInstanceID = 2C5853CC-D7C4-405B-AE21-AE613583B58D
 # environment
 ELECTRON_RUN_AS_NODE = 1
 # default
 .FEATURES := target-specific order-only second-expansion else-if archives jobserver check-symlink
 # environment
-SSH_AUTH_SOCK = /private/tmp/com.apple.launchd.pSD75py6e6/Listeners
+SSH_AUTH_SOCK = /private/tmp/com.apple.launchd.hJzLcUVYzr/Listeners
 # automatic
 %F = $(notdir $%)
 # environment
 CONDA_EXE = /opt/anaconda3/bin/conda
 # environment
-PWD = /Users/chienpokky/Library/Mobile Documents/com~apple~CloudDocs/PokkyFiles/research/optics/FPCavity/code/E_Efficiency
+PWD = /Users/chienpokky/Library/Mobile Documents/com~apple~CloudDocs/PokkyFiles/research/optics/FPCavity/code/archived/E_Efficiency
 # environment
 HOMEBREW_CELLAR = /opt/homebrew/Cellar
 # environment
@@ -154,7 +158,7 @@ MAKELEVEL := 0
 # environment
 CONDA_PREFIX = /opt/anaconda3
 # environment
-VSCODE_PID = 678
+VSCODE_PID = 689
 # environment
 LANG = C
 # variable set hash-table stats:
@@ -166,7 +170,7 @@ LANG = C
 
 # Directories
 
-# . (device 16777232, inode 36721974): 21 files, no impossibilities.
+# . (device 16777230, inode 36721974): 21 files, no impossibilities.
 
 # 21 files, no impossibilities in 1 directories.
 
@@ -240,8 +244,7 @@ GNUmakefile:
 # strcache size: total = 0 / max = 0 / min = 4096 / avg = 0
 # strcache free: total = 0 / max = 0 / min = 4096 / avg = 0
 
-# Finished Make data base on Tue Feb 24 16:38:28 2026
+# Finished Make data base on Wed Feb 25 16:05:01 2026
+ 
 
  
-make: *** No rule to make target `all'.  Stop.
-
